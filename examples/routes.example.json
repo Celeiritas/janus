@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "senders": {
+    "{{PC}}":       { "via": "ssh", "key": "{{PC}}", "node": "{{PC}}" },
+    "laptop":       { "via": "ssh", "key": "laptop", "node": "laptop" },
+    "{{SERVER}}":   { "via": "local" },
+    "taildrop":     { "via": "taildrop" },
+    "elaia":        { "via": "elaia", "users": ["you@example.com"] },
+    "fetch:decks":  { "via": "fetch", "fetch": "decks" },
+    "fetch:jellyfin-themes": { "via": "fetch", "fetch": "jellyfin-themes" },
+    "fetch:github": { "via": "fetch", "fetch": "github" }
+  },
+  "kinds": {
+    "mentor-lesson": { "ext": [".json"], "sniff": "json", "max_bytes": 524288,
+                       "shape": ["mentor-lesson-fields", "placeholders-known"] },
+    "torrent":  { "ext": [".torrent"], "sniff": "bencode", "max_bytes": 4194304 },
+    "magnet":   { "ext": [".magnet"], "sniff": "text", "max_bytes": 4096, "shape": ["magnet-uri"] },
+    "note":     { "ext": [".txt"], "sniff": "text", "max_bytes": 4096 },
+    "image":    { "ext": [".png", ".jpg", ".jpeg", ".webp", ".gif"], "sniff": "image", "max_bytes": 52428800 },
+    "audio":    { "ext": [".mp3", ".flac", ".ogg", ".m4a", ".wav"], "sniff": "audio", "max_bytes": 1073741824 },
+    "video":    { "ext": [".mkv", ".mp4", ".webm"], "sniff": "video", "max_bytes": 34359738368 },
+    "document": { "ext": [".pdf", ".txt", ".md", ".docx", ".odt", ".epub"], "sniff": "document", "max_bytes": 104857600 },
+    "archive":  { "ext": [".zip", ".tar", ".tar.gz", ".tgz"], "sniff": "archive", "max_bytes": 8589934592,
+                  "shape": ["archive-listing"] },
+    "archive-opaque": { "ext": [".7z", ".rar"], "sniff": "archive", "max_bytes": 8589934592, "note": "contents unchecked" },
+    "rom":      { "ext": [".iso", ".chd", ".bin", ".cue", ".m3u", ".nsp", ".xci", ".ciso", ".wbfs", ".rvz"],
+                  "max_bytes": 68719476736 },
+    "deploy-request": { "ext": [".json"], "sniff": "json", "max_bytes": 4096, "shape": ["deploy-request-fields"] }
+  },
+  "routes": {
+    "lesson":     { "from": ["{{PC}}", "fetch:decks"], "kinds": ["mentor-lesson"], "destination": "private" },
+    "torrent":    { "from": ["{{PC}}", "taildrop", "elaia"], "kinds": ["torrent", "magnet"] },
+    "torrent-*":  { "same_as": "torrent" },
+    "servermail": { "from": ["{{PC}}", "laptop", "taildrop"],
+                    "kinds": ["image", "audio", "video", "document", "archive", "archive-opaque"],
+                    "taildrop_kinds": ["image", "document"] },
+    "roms":       { "from": ["{{PC}}"], "kinds": ["rom", "archive", "archive-opaque"] },
+    "jellyfin-theme": { "from": ["fetch:jellyfin-themes"], "kinds": ["audio"], "max_bytes": 20971520 },
+    "pcmail":     { "from": ["{{SERVER}}", "elaia"], "kinds": ["image", "document", "note"], "destination": "private" },
+    "phone":      { "from": ["{{SERVER}}", "elaia"], "kinds": ["image", "document", "note"] },
+    "deploy-request": { "from": ["fetch:github"], "kinds": ["deploy-request"] }
+  },
+  "approvers": {
+    "zeus": { "users": ["you@example.com"], "nodes": ["{{PHONE}}", "{{PC}}"], "max_age_s": 120 }
+  }
+}

@@ -219,7 +219,10 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# Hermes
+# Janus
+seen.db
+map.json
+*.jsonl
 CLAUDE.local.md
 node_modules/
 tests/out/

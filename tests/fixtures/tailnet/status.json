@@ -1,0 +1,14 @@
+{
+  "Version": "1.80.0",
+  "BackendState": "Running",
+  "Self": { "ID": "1", "HostName": "homeserver", "DNSName": "homeserver.example.ts.net.", "OS": "linux",
+            "TailscaleIPs": ["192.0.2.1"], "Online": true },
+  "Peer": {
+    "n2": { "ID": "2", "HostName": "desktop", "DNSName": "desktop.example.ts.net.", "OS": "windows",
+            "TailscaleIPs": ["192.0.2.10"], "Online": true, "LastSeen": "2026-10-20T14:00:00Z" },
+    "n3": { "ID": "3", "HostName": "laptop", "DNSName": "laptop.example.ts.net.", "OS": "linux",
+            "TailscaleIPs": ["192.0.2.11"], "Online": false, "LastSeen": "2026-10-19T08:00:00Z" },
+    "n4": { "ID": "4", "HostName": "phone", "DNSName": "phone.example.ts.net.", "OS": "android",
+            "TailscaleIPs": ["192.0.2.12"], "Online": true, "LastSeen": "2026-10-20T14:00:00Z" }
+  }
+}

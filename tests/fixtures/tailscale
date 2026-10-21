@@ -1,0 +1,59 @@
+#!/usr/bin/env python3
+"""A fake tailscale for tests ($JANUS_TAILSCALE points Janus at it). It answers from fixture files in
+$JANUS_FAKE_TAILNET (default: tests/fixtures/tailnet):
+    tailscale status --json          prints status.json as it is
+    tailscale whois --json <ip>      answers like the real one from whois.json ({ "<ip>": { "node": "desktop",
+                                     "login": "you@example.com" } }); an unknown ip exits 1 like the real one.
+                                     JANUS_FAKE_WHOIS=fail exits 1 for every ip, =garbage prints non-JSON, =hang never returns
+    tailscale ping [--c N] <ip>      "pong" and exit 0 for an ip listed in ping.json as true, else "timeout" and exit 1
+    tailscale version                prints a version"""
+import json
+import os
+import sys
+import time
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+TAILNET = os.environ.get("JANUS_FAKE_TAILNET") or os.path.join(HERE, "tailnet")
+
+
+def fixture(name, default):
+    try:
+        with open(os.path.join(TAILNET, name), encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return default
+
+
+cmd = sys.argv[1:]
+if cmd == ["status", "--json"]:
+    print(json.dumps(fixture("status.json", {"Self": {}, "Peer": {}})))
+    sys.exit(0)
+if cmd[:2] == ["whois", "--json"] and len(cmd) == 3:
+    mode = os.environ.get("JANUS_FAKE_WHOIS", "ok")
+    if mode == "hang":
+        time.sleep(3600)
+    if mode == "garbage":
+        print("not json")
+        sys.exit(0)
+    entry = None if mode == "fail" else fixture("whois.json", {}).get(cmd[2])
+    if not entry:
+        print("no match for IP " + cmd[2], file=sys.stderr)
+        sys.exit(1)
+    node = entry["node"]
+    print(json.dumps({"Node": {"ID": 1, "Name": node + ".example.ts.net.", "ComputedName": node, "Addresses": [cmd[2] + "/32"],
+                               "Online": True},
+                      "UserProfile": {"ID": 2, "LoginName": entry.get("login", "you@example.com"), "DisplayName": "You"},
+                      "CapMap": None}))
+    sys.exit(0)
+if cmd[:1] == ["ping"] and len(cmd) >= 2:
+    ip = cmd[-1]
+    if fixture("ping.json", {}).get(ip):
+        print("pong from %s (%s) via DERP in 12ms" % (ip, ip))
+        sys.exit(0)
+    print("timeout waiting for ping reply", file=sys.stderr)
+    sys.exit(1)
+if cmd == ["version"]:
+    print("1.80.0\n  tailscale commit: fake\n  go version: fake")
+    sys.exit(0)
+print("fake tailscale: unknown command %r" % " ".join(cmd), file=sys.stderr)
+sys.exit(2)
