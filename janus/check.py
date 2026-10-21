@@ -6,7 +6,7 @@ import os
 import time
 from pathlib import Path
 
-from janus import config, identity, version
+from janus import config, identity, kinds, version
 
 EXIT = {"pass": 0, "quarantine": 10, "duplicate": 11, "fail": 2}
 CHECKS = ("route", "kind", "shape", "integrity")
@@ -74,6 +74,7 @@ class Context:
         self.env = dict(env if env is not None else os.environ)
         self.whois = identity.Whois(self.env)
         self.route = self.sender = None        # set by check_route when the route and the sender resolve
+        self.kind = None                       # set by check_kind when a kind matches
         self.via = arrival.sender.get("via")
 
 
@@ -165,20 +166,88 @@ def check_route(ctx, v):
     ctx.route = route
 
 
-# ---------- checks 2-4 come with issues #4, #5 and #6 ----------
+# ---------- check 2: kind ----------
 
-NOT_BUILT = {"kind": 4, "shape": 5, "integrity": 6}
+def check_kind(ctx, v):
+    """Check 2: executables refused first (in code), then the ending must be an allowed kind for the route (the Taildrop
+    list for Taildrop) and the content must pass that kind's sniff. Sets v.kind and ctx.kind when a kind matches."""
+    a, cfg = ctx.arrival, ctx.cfg
+    name = a.name
+    ctx.kind = None
+    try:
+        size = a.data.stat().st_size
+        head = kinds.read_head(a.data)
+    except OSError as e:
+        raise Failed("cannot read %s (%s)" % (a.data, e.strerror or e))
+    reason = kinds.refused_name(name) or kinds.refused_content(name, head)
+    if reason:
+        v.fail("kind", reason)
+    route = ctx.route
+    allowed = route.kinds_for(ctx.via) if route is not None else list(cfg.kinds)
+    # the ending, judged against every kind the config knows, so the sentence can say what the route lacks
+    all_exts = {e for k in cfg.kinds.values() for e in k.ext}
+    ext = kinds.ext_of(name, all_exts)
+    if ext is None:
+        if not reason:
+            v.fail("kind", "No kind in %s has files ending like %s, so it can't arrive on any route." % (cfg.what, name))
+        return
+    with_ext = [k for k in cfg.kinds.values() if ext in k.ext]
+    candidates = [cfg.kinds[n] for n in allowed if n in cfg.kinds and ext in cfg.kinds[n].ext]   # in the route's order
+    if not candidates:
+        if route is not None and ctx.via == "taildrop" and any(k.name in route.kinds for k in with_ext):
+            v.fail("kind", "%s is %s, which the %s route doesn't take by Taildrop (by Taildrop it takes only %s); send "
+                   "it from a keyed device instead." % (name, an(with_ext[0].name), route.id, config.join(allowed) or "nothing"))
+        elif route is not None:
+            v.fail("kind", "%s is %s, which the %s route doesn't take (it takes %s)."
+                   % (name, an(with_ext[0].name), route.id, config.join(allowed)))
+        return
+    for k in candidates:
+        if k.sniff is None or kinds.sniff(k.sniff, a.data, name, ext, head, size):
+            ctx.kind = k
+            v.kind = k.name
+            if k.note:
+                v.notes.append("%s %s (%s)." % (k.name.replace("-", " "), k.note, ext))
+            return
+    k = candidates[0]
+    ctx.kind = k
+    v.kind = k.name
+    v.fail("kind", "%s isn't %s inside." % (name, an(kinds.label(ext, k.sniff))))
+
+
+def an(word):
+    return ("an " if word[:1].lower() in "aeiou" else "a ") + word
+
+
+# ---------- check 3: shape (size here; the shape rules come with issue #5) ----------
+
+def check_size(ctx, v):
+    """The size cap of the kind and of the route (design §3 check 3, first line)."""
+    a = ctx.arrival
+    size = a.data.stat().st_size
+    if ctx.kind is not None and ctx.kind.max_bytes is not None and size > ctx.kind.max_bytes:
+        v.fail("shape", "%s is %s, over the %s cap for %s files."
+               % (a.name, config.size(size), config.size(ctx.kind.max_bytes), ctx.kind.name))
+    if ctx.route is not None and ctx.route.max_bytes is not None and size > ctx.route.max_bytes:
+        v.fail("shape", "%s is %s, over the %s cap of the %s route."
+               % (a.name, config.size(size), config.size(ctx.route.max_bytes), ctx.route.id))
+
+
+# ---------- checks 3 (rules) and 4 come with issues #5 and #6 ----------
+
+NOT_BUILT = {"shape": 5, "integrity": 6}
 
 
 def check_rest(ctx, v):
     """Until every check is built, a verdict can never be a pass: a quarantine stands, but anything else is "Janus
     failed" (exit 2) and Hermes holds the arrival."""
     for c in NOT_BUILT:
-        v.checks[c] = "not-built"
+        if v.checks[c] == "ok":
+            v.checks[c] = "not-built"
     if v.verdict != "quarantine":
         names = sorted(NOT_BUILT)
-        raise Failed("the %s checks are not built yet (issues %s); the arrival waits"
-                     % (config.join(names), ", ".join("#%d" % NOT_BUILT[c] for c in names)))
+        raise Failed("the %s check%s not built yet (issue%s %s); the arrival waits"
+                     % (config.join(names), " is" if len(names) == 1 else "s are", "" if len(names) == 1 else "s",
+                        ", ".join("#%d" % NOT_BUILT[c] for c in names)))
 
 
 # ---------- the run ----------
@@ -196,6 +265,8 @@ def run(folder, cfg=None, env=None):
         raise Failed("%s has no data" % arrival.folder)
     ctx = Context(arrival, cfg, env)
     check_route(ctx, v)
+    check_kind(ctx, v)
+    check_size(ctx, v)
     check_rest(ctx, v)
     return EXIT[v.verdict], v.as_dict()
 
