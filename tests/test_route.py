@@ -7,6 +7,9 @@ import unittest
 
 from janus import check, identity
 from tests.helpers import GUEST_IP, LAPTOP_IP, PC_IP, Realm, snapshot
+from tests.samples import sample
+
+PNG = sample(".png")
 
 
 class RouteCheckTest(unittest.TestCase):
@@ -134,7 +137,7 @@ class RouteCheckTest(unittest.TestCase):
 
     # --- the command ---
     def test_a_refused_route_is_a_quarantine_on_the_command_line(self):
-        folder = self.r.arrival("a.png", key="desktop", ip=LAPTOP_IP)
+        folder = self.r.arrival("a.png", PNG, key="desktop", ip=LAPTOP_IP)
         r = self.r.cli("check", "--json", str(folder))
         self.assertEqual(r.returncode, 10, r.stderr)
         doc = json.loads(r.stdout)
@@ -145,7 +148,7 @@ class RouteCheckTest(unittest.TestCase):
             self.assertIn(key, doc)
 
     def test_a_clean_route_cannot_pass_until_every_check_is_built(self):
-        folder = self.r.arrival("a.png")
+        folder = self.r.arrival("a.png", PNG)
         r = self.r.cli("check", "--json", str(folder))
         self.assertEqual(r.returncode, 2, r.stdout)
         self.assertIn("not built yet", r.stderr)
