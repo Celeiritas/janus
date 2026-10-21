@@ -1,6 +1,22 @@
 {
-  "192.0.2.10": { "node": "desktop", "login": "you@example.com" },
-  "192.0.2.11": { "node": "laptop", "login": "you@example.com" },
-  "192.0.2.12": { "node": "phone", "login": "you@example.com" },
-  "192.0.2.13": { "node": "guest", "login": "someone-else@example.com" }
+  "192.0.2.10": {
+    "node": "desktop",
+    "login": "you@example.com"
+  },
+  "192.0.2.11": {
+    "node": "laptop",
+    "login": "you@example.com"
+  },
+  "192.0.2.12": {
+    "node": "phone",
+    "login": "you@example.com"
+  },
+  "192.0.2.13": {
+    "node": "guest",
+    "login": "someone-else@example.com"
+  },
+  "192.0.2.14": {
+    "node": "homeserver",
+    "login": null
+  }
 }

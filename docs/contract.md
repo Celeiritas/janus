@@ -1,6 +1,6 @@
 # The contract: Hermes ↔ Janus
 
-Janus's side of what [hermes](https://github.com/Celeiritas/hermes) `docs/janus-contract.md` promises. Hermes calls `janus check --json <arrival>`, reads one JSON verdict from stdout and acts on the exit code. Janus reads the arrival and **never writes inside it**; it writes only its own log and `seen.db` (design §5). The Zeus ↔ Janus side (`verify-approval`) comes with design §4.
+Janus's side of what [hermes](https://github.com/Celeiritas/hermes) `docs/janus-contract.md` promises. Hermes calls `janus check --json <arrival>`, reads one JSON verdict from stdout and acts on the exit code. Janus reads the arrival and **never writes inside it**; it writes only its own log and `seen.db` (design §5). The Zeus ↔ Janus side (`verify-approval`) is the last section of this file.
 
 ## The call and the answer
 ```
@@ -36,3 +36,27 @@ A folder sent parted out, never zipped. `<arrival>/data/` is the folder's conten
 - `meta.json` is as for a file, with `"tree": true`, `name` = the folder's name, `bytes` = the sum of the files' sizes, and `sha256` = **the SHA-256 of `manifest.json`'s bytes** (what Hermes's `done <bundle> <manifest-sha256>` carries). The duplicate rule uses this hash, not each file's.
 - Janus runs check 1 once, checks 2–4 on every listed file (hash and size against the manifest entry; the route's kinds for every file; archives inside the tree are listed, never opened), refuses a symlink anywhere under `data/`, a file in the folder but not in the manifest, and a file in the manifest but not in the folder (holes). At most 50 000 files.
 - One verdict. Any failure quarantines the whole folder with the file named: "`setup.exe` inside `photos/` is never allowed …" (a file at the root is "inside `<folder>/`").
+
+# The contract: Zeus ↔ Janus (`janus verify-approval`, design §4)
+Zeus writes **one JSON object** (4 KB at most) to stdin and reads one back:
+```
+{ "action": "deploy", "repo": "you/argus-ui", "sha": "<40 hex>", "user": "<tailnet login>" | null,
+  "ip": "<client address>", "when": "<ISO 8601 with offset>", "via": "elaia" | "ssh" }
+```
+- `action`: `deploy` or `rollback` (with `repo` as `owner/name` and a full 40-hex `sha`), or `release` (with `arrival`, a Hermes arrival id `YYYYMMDD-HHMMSS-<hex>`, instead of `repo`/`sha`).
+- `via` `elaia` (the default): the Throne page is asking; `user` is the `Tailscale-User-Login` it saw and `ip` the `X-Forwarded-For` address. `via` `ssh`: `ip` is the client address from `SSH_CONNECTION` and **`user` is `null`** — Janus takes the login from the tailnet and returns it.
+- `when`: the moment of the owner's yes (the 3-second hold, or the typed yes).
+
+Janus checks, and lists **every** reason at once: the request is well formed; `routes.json` has `approvers.zeus`; `when` is within `max_age_s` (120 s by default) and not in the future; a named `user` is in `approvers.zeus.users`; `tailscale whois <ip>` names a device in `approvers.zeus.nodes`; that device has a login (a tagged device cannot approve); the login equals the named `user`, or, over ssh, is itself in `users`.
+
+The answer, always one JSON object on stdout:
+```
+{ "janus": "0.2.0", "action": "deploy", "verdict": "allowed", "reasons": [], "user": "<login the tailnet reported>", "node": "<device>" }
+```
+| Exit | `verdict` | Meaning |
+|---|---|---|
+| 0 | `allowed` | Zeus logs the approval (with `user` and `node` from this answer) and starts the deploy |
+| 10 | `refused` | `reasons` are plain sentences the Throne shows as-is; Zeus leaves the request pending |
+| 2 | `failed` | tailscale not answering, no such peer, routes.json unreadable or with errors; Zeus holds the request and Argus glares |
+
+Janus answers only "is this person on this device allowed, now". Whether the request is still pending, unexpired and for the right commit, the signature and the deploy are Zeus's (zeus `docs/contract.md` §5). One line goes to `~/.local/share/janus/log/approvals-YYYY-MM.jsonl` for every call: `t, action, verdict, reasons, user, node, claimed_user, repo | arrival, sha, ip, via, when, janus`. `--routes <file>` judges by another file (the config repo's deploy checks a new file before installing it).
