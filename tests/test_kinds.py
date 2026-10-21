@@ -244,7 +244,7 @@ class KindCheckTest(unittest.TestCase):
         self.assertEqual(r.returncode, 10, r.stderr)
         doc = json.loads(r.stdout)
         self.assertEqual(doc["kind"], "image")
-        self.assertEqual(doc["checks"], {"route": "ok", "kind": "fail", "shape": "not-built", "integrity": "not-built"})
+        self.assertEqual(doc["checks"], {"route": "ok", "kind": "fail", "shape": "ok", "integrity": "not-built"})
         folder = self.r.arrival("photo.png", samples.sample(".png"))
         r = self.r.cli("check", "--json", str(folder))
         self.assertEqual(r.returncode, 2)

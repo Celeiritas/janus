@@ -12,7 +12,7 @@
   },
   "kinds": {
     "mentor-lesson": { "ext": [".json"], "sniff": "json", "max_bytes": 524288,
-                       "shape": ["mentor-lesson-fields", "placeholders-known"] },
+                       "shape": ["mentor-lesson-fields", "placeholders-known", "public-no-real-names"] },
     "torrent":  { "ext": [".torrent"], "sniff": "bencode", "max_bytes": 4194304 },
     "magnet":   { "ext": [".magnet"], "sniff": "text", "max_bytes": 4096, "shape": ["magnet-uri"] },
     "note":     { "ext": [".txt"], "sniff": "text", "max_bytes": 4096 },

@@ -6,7 +6,7 @@ import os
 import time
 from pathlib import Path
 
-from janus import config, identity, kinds, version
+from janus import config, identity, kinds, shapes, version
 
 EXIT = {"pass": 0, "quarantine": 10, "duplicate": 11, "fail": 2}
 CHECKS = ("route", "kind", "shape", "integrity")
@@ -232,9 +232,26 @@ def check_size(ctx, v):
                % (a.name, config.size(size), config.size(ctx.route.max_bytes), ctx.route.id))
 
 
-# ---------- checks 3 (rules) and 4 come with issues #5 and #6 ----------
+def check_shape(ctx, v):
+    """Check 3, the rules: the kind's `shape` list, every rule in order (shapes.py; archive-listing comes with #7)."""
+    if ctx.kind is None:
+        return
+    a = ctx.arrival
+    for rule in ctx.kind.shape:
+        fn = shapes.RULES.get(rule)
+        if fn is None:
+            raise Failed("the %s shape rule is not built yet (issue #7); the arrival waits" % rule)
+        try:
+            reasons = fn(a.name, a.data, ctx.route, ctx.env)
+        except OSError as e:
+            raise Failed("cannot read %s (%s)" % (a.data, e.strerror or e))
+        for r in reasons:
+            v.fail("shape", r)
 
-NOT_BUILT = {"shape": 5, "integrity": 6}
+
+# ---------- check 4 comes with issue #6 ----------
+
+NOT_BUILT = {"integrity": 6}
 
 
 def check_rest(ctx, v):
@@ -267,6 +284,7 @@ def run(folder, cfg=None, env=None):
     check_route(ctx, v)
     check_kind(ctx, v)
     check_size(ctx, v)
+    check_shape(ctx, v)
     check_rest(ctx, v)
     return EXIT[v.verdict], v.as_dict()
 
