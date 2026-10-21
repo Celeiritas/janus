@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.1.3 – 2026-10-21
+- Shape check (#5): `shapes.py` with the rules a kind's `shape` list names, all run in order: `mentor-lesson-fields` (a `metadata.module_name` and at least one card list), `placeholders-known` (private destination: every `{{NAME}}` is one of argus-ui's seven, a lesson's `{{BLANK}}`s aside), `public-no-real-names` (public destination: the `check-private.sh` patterns plus `~/.config/leafy/denylist.txt` when present; the reason says what was found and on which line, never the text itself), `magnet-uri`, `deploy-request-fields`. The example's `mentor-lesson` kind lists the public rule too (it acts only on a public destination). An archive still waits until `archive-listing` exists (#7)
+
 ## 0.1.2 – 2026-10-21
 - Kind check (#4): `kinds.py` refuses executables in code (the extension list, double extensions, hidden names, and PE/ELF/Mach-O/`#!` contents, whatever the name says); sniffers for `json`, `bencode`, `text`, `image`, `audio`, `video`, `document` (PDF magic, docx/odt/epub by their zip members, text) and `archive`; the ending and the content must agree ("photo.png isn't a PNG inside."); the route must take the kind, with `taildrop_kinds` narrowing Taildrop arrivals; the kind's and the route's size caps; `kind` and the opaque-archive note in the verdict. `tests/samples.py` makes one sample of every kind in code
 
