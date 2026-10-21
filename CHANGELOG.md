@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.1.4 – 2026-10-21
+- Integrity check (#6): the SHA-256 of `data` is recomputed in 1 MB chunks (never Hermes's hash) and compared with `meta.sha256`; the size on disk must equal `meta.bytes`. `seen.py`: SQLite `~/.local/share/janus/seen.db` (`$JANUS_STATE` names the folder) of hash → route, id, first seen; the same hash on the same route is a duplicate (exit 11); a pass records the hash; a corrupt store is exit 2, never a pass; `janus seen list` and `janus seen forget <hash>`. `log.py`: one line per check in `log/verdicts-YYYY-MM.jsonl` (design §5). With all four checks built, `janus check` now passes clean arrivals (exit 0)
+
 ## 0.1.3 – 2026-10-21
 - Shape check (#5): `shapes.py` with the rules a kind's `shape` list names, all run in order: `mentor-lesson-fields` (a `metadata.module_name` and at least one card list), `placeholders-known` (private destination: every `{{NAME}}` is one of argus-ui's seven, a lesson's `{{BLANK}}`s aside), `public-no-real-names` (public destination: the `check-private.sh` patterns plus `~/.config/leafy/denylist.txt` when present; the reason says what was found and on which line, never the text itself), `magnet-uri`, `deploy-request-fields`. The example's `mentor-lesson` kind lists the public rule too (it acts only on a public destination). An archive still waits until `archive-listing` exists (#7)
 

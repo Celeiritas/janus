@@ -1,6 +1,5 @@
 """Check 2, the kind (docs/design.md §3 check 2, issue #4): executables refused in code, extension and content must
-agree, the route must take the kind (the Taildrop list for Taildrop), and the size caps (the first line of check 3).
-Until checks 3 (rules) and 4 are built nothing passes: a clean file is exit 2 and the arrival waits."""
+agree, the route must take the kind (the Taildrop list for Taildrop), and the size caps (the first line of check 3)."""
 import json
 import os
 import tempfile
@@ -238,17 +237,16 @@ class KindCheckTest(unittest.TestCase):
                 self.assertIn(name, r)
                 self.assertTrue(r.endswith("."), r)
 
-    def test_command_line_quarantines_with_the_kind_and_passes_nothing_yet(self):
+    def test_command_line_quarantines_with_the_kind_and_passes_a_clean_file(self):
         folder = self.r.arrival("photo.png", samples.IMPOSTORS["exe"])
         r = self.r.cli("check", "--json", str(folder))
         self.assertEqual(r.returncode, 10, r.stderr)
         doc = json.loads(r.stdout)
         self.assertEqual(doc["kind"], "image")
-        self.assertEqual(doc["checks"], {"route": "ok", "kind": "fail", "shape": "ok", "integrity": "not-built"})
+        self.assertEqual(doc["checks"], {"route": "ok", "kind": "fail", "shape": "ok", "integrity": "ok"})
         folder = self.r.arrival("photo.png", samples.sample(".png"))
         r = self.r.cli("check", "--json", str(folder))
-        self.assertEqual(r.returncode, 2)
-        self.assertIn("not built yet", r.stderr)
+        self.assertEqual(r.returncode, 0, r.stderr)
 
 
 if __name__ == "__main__":

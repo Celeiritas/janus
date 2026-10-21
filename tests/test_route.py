@@ -1,6 +1,5 @@
 """Check 1, the route (docs/design.md §3, issue #3): the route exists, the sender is who Tailscale says (never what
-meta.json claims), the direction fits, and the route allows that sender. Until checks 2-4 are built, nothing passes:
-a clean route check is "Janus failed" (exit 2) so Hermes holds the arrival."""
+meta.json claims), the direction fits, and the route allows that sender."""
 import json
 import tempfile
 import unittest
@@ -147,12 +146,13 @@ class RouteCheckTest(unittest.TestCase):
         for key in ("janus", "sha256", "kind", "checks", "reasons", "notes", "ms"):
             self.assertIn(key, doc)
 
-    def test_a_clean_route_cannot_pass_until_every_check_is_built(self):
+    def test_a_clean_arrival_passes_on_the_command_line(self):
         folder = self.r.arrival("a.png", PNG)
         r = self.r.cli("check", "--json", str(folder))
-        self.assertEqual(r.returncode, 2, r.stdout)
-        self.assertIn("not built yet", r.stderr)
-        self.assertEqual(json.loads(r.stdout)["verdict"], "fail")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        doc = json.loads(r.stdout)
+        self.assertEqual(doc["verdict"], "pass")
+        self.assertEqual(doc["checks"], {"route": "ok", "kind": "ok", "shape": "ok", "integrity": "ok"})
 
     def test_without_json_the_reasons_are_printed_as_lines(self):
         folder = self.r.arrival("a.png", key="desktop", ip=LAPTOP_IP)
