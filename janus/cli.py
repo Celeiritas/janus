@@ -2,7 +2,7 @@
 import argparse
 import sys
 
-from janus import check, config, version
+from janus import check, config, seen, version
 
 DESCRIPTION = ("Janus is the door: he checks every Hermes delivery before it lands and draws which doors of the "
                "tailnet are open. He never carries, moves, unpacks or runs anything.")
@@ -56,7 +56,7 @@ def build_parser():
     p = sub.add_parser("seen", help="the hashes Janus has passed: list them, or forget one")
     p.add_argument("action", choices=("list", "forget"))
     p.add_argument("hash", nargs="?")
-    p.set_defaults(func=not_built("seen", 6))
+    p.set_defaults(func=seen.main)
     return parser
 
 

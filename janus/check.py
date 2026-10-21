@@ -1,12 +1,13 @@
 """janus check: the door, check by check (docs/design.md §3). Janus reads the arrival (meta.json and data) and never
 writes inside it. The four checks (route, kind, shape, integrity) always all run, so one verdict lists every reason.
 Exit 0 pass · 10 quarantine · 11 duplicate · 2 Janus failed (bad config, whois unavailable, I/O error: Hermes holds)."""
+import hashlib
 import json
 import os
 import time
 from pathlib import Path
 
-from janus import config, identity, kinds, shapes, version
+from janus import config, identity, kinds, log, seen, shapes, version
 
 EXIT = {"pass": 0, "quarantine": 10, "duplicate": 11, "fail": 2}
 CHECKS = ("route", "kind", "shape", "integrity")
@@ -75,6 +76,8 @@ class Context:
         self.whois = identity.Whois(self.env)
         self.route = self.sender = None        # set by check_route when the route and the sender resolve
         self.kind = None                       # set by check_kind when a kind matches
+        self.identity = None                   # what whois said about the sender's address, for the log
+        self.store = None                      # seen.db, opened by run()
         self.via = arrival.sender.get("via")
 
 
@@ -106,7 +109,7 @@ def resolve_sender(ctx):
             return None, ("The arrival records no tailnet address for %s, so Tailscale can't confirm who sent it."
                           % sender.name)
         try:
-            answer = ctx.whois(ip)
+            answer = ctx.identity = ctx.whois(ip)
         except identity.Unavailable as e:
             raise Failed(str(e))
         if answer["node"] != sender.node:
@@ -249,22 +252,50 @@ def check_shape(ctx, v):
             v.fail("shape", r)
 
 
-# ---------- check 4 comes with issue #6 ----------
+# ---------- check 4: integrity ----------
 
-NOT_BUILT = {"integrity": 6}
+CHUNK = 1 << 20
 
 
-def check_rest(ctx, v):
-    """Until every check is built, a verdict can never be a pass: a quarantine stands, but anything else is "Janus
-    failed" (exit 2) and Hermes holds the arrival."""
-    for c in NOT_BUILT:
-        if v.checks[c] == "ok":
-            v.checks[c] = "not-built"
-    if v.verdict != "quarantine":
-        names = sorted(NOT_BUILT)
-        raise Failed("the %s check%s not built yet (issue%s %s); the arrival waits"
-                     % (config.join(names), " is" if len(names) == 1 else "s are", "" if len(names) == 1 else "s",
-                        ", ".join("#%d" % NOT_BUILT[c] for c in names)))
+def sha256_file(path):
+    """The SHA-256 of a file, read in 1 MB chunks: a disc image never sits in memory."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(CHUNK), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def check_integrity(ctx, v):
+    """Check 4: the hash recomputed (never Hermes's), the size on disk against meta.bytes, then seen.db: the same hash
+    on the same route is a duplicate. A pass records the hash (run() does, once the verdict is known)."""
+    a = ctx.arrival
+    sender = who(ctx)
+    try:
+        size = a.data.stat().st_size
+        v.sha256 = sha256_file(a.data)
+    except OSError as e:
+        raise Failed("cannot read %s (%s)" % (a.data, e.strerror or e))
+    declared = a.meta.get("sha256")
+    if not isinstance(declared, str) or declared.lower() != v.sha256:
+        v.fail("integrity", "%s's checksum doesn't match what %s declared (the transfer may have been cut short or "
+                            "changed on the way)." % (a.name, sender))
+    if a.meta.get("bytes") != size:
+        v.fail("integrity", "%s is %s on disk but %s declared %s." % (a.name, config.size(size), sender,
+               config.size(a.meta["bytes"]) if isinstance(a.meta.get("bytes"), int) else repr(a.meta.get("bytes"))))
+    if ctx.store is not None and a.route_id:
+        try:
+            earlier = ctx.store.lookup(v.sha256, a.route_id)
+        except seen.Broken as e:
+            raise Failed(str(e))
+        if earlier:
+            sentence = "%s already arrived on the %s route as %s (first seen %s)." % (a.name, a.route_id, earlier["id"],
+                                                                                      earlier["first_seen"])
+            if v.verdict == "quarantine":
+                v.notes.append(sentence)
+            else:
+                v.duplicate = True
+                v.reasons.append(sentence)
 
 
 # ---------- the run ----------
@@ -281,12 +312,31 @@ def run(folder, cfg=None, env=None):
     if not arrival.data.exists():
         raise Failed("%s has no data" % arrival.folder)
     ctx = Context(arrival, cfg, env)
-    check_route(ctx, v)
-    check_kind(ctx, v)
-    check_size(ctx, v)
-    check_shape(ctx, v)
-    check_rest(ctx, v)
-    return EXIT[v.verdict], v.as_dict()
+    try:
+        ctx.store = seen.Seen(env=ctx.env)
+    except seen.Broken as e:
+        raise Failed(str(e))
+    try:
+        check_route(ctx, v)
+        check_kind(ctx, v)
+        check_size(ctx, v)
+        check_shape(ctx, v)
+        check_integrity(ctx, v)
+        if v.verdict == "pass":
+            try:
+                ctx.store.record(v.sha256, arrival.route_id, str(arrival.meta.get("id") or arrival.folder.name))
+            except seen.Broken as e:
+                raise Failed(str(e))
+    except Failed as e:
+        log.write("verdicts", log.verdict_entry(arrival, {"verdict": "fail", "reasons": ["Janus failed: %s." % e],
+                                                           "sha256": v.sha256, "kind": v.kind, "checks": v.checks,
+                                                           "notes": v.notes}, ctx.identity), ctx.env)
+        raise
+    finally:
+        ctx.store.close()
+    doc = v.as_dict()
+    log.write("verdicts", log.verdict_entry(arrival, doc, ctx.identity), ctx.env)
+    return EXIT[v.verdict], doc
 
 
 def main(args):
