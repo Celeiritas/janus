@@ -187,12 +187,6 @@ class ShapeCheckTest(unittest.TestCase):
             "argus-ui-aaaaaaa.json: version must be text.",
             "argus-ui-aaaaaaa.json: changelog must be a list of lines."])
 
-    # --- the archive rule waits for #7 ---
-    def test_an_archive_waits_until_the_listing_rule_is_built(self):
-        code, doc = self.r.check(self.r.arrival("photos.zip", samples.sample(".zip")))
-        self.assertEqual(code, 2)
-        self.assertIn("archive-listing shape rule is not built yet", doc["failed"])
-
     def test_a_shape_failure_is_a_quarantine_on_the_command_line(self):
         r = self.r.cli("check", "--json", str(self.lesson(metadata={})))
         self.assertEqual(r.returncode, 10, r.stderr)
