@@ -77,9 +77,10 @@ class Realm:
         except check.Failed as e:
             return 2, {"failed": str(e)}
 
-    def cli(self, *args, **env):
+    def cli(self, *args, input=None, **env):
+        """Run `janus <args>` as a subprocess; `input` is fed to stdin (verify-approval reads its request there)."""
         return subprocess.run([sys.executable, "-m", "janus", *args], cwd=ROOT, capture_output=True, text=True,
-                              env={**os.environ, **env})
+                              input=input if input is not None else "", env={**os.environ, **env}, timeout=60)
 
 
 def snapshot(folder):
