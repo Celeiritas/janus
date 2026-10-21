@@ -54,6 +54,12 @@ class Arrival:
         self.route_id = str(self.meta.get("route") or "")
         self.name = str(self.meta.get("name") or self.meta.get("id") or "the file")
         self.direction = str(self.meta.get("direction") or "in")
+        self.manifest = self.folder / "manifest.json"
+
+    @property
+    def is_tree(self):
+        """A tree arrival (design §3a): data/ is a folder and a manifest.json sits next to meta.json."""
+        return self.data.is_dir() and not self.data.is_symlink() or self.manifest.exists()
 
     def read_meta(self):
         try:
@@ -68,10 +74,20 @@ class Arrival:
         return meta
 
 
+class Item:
+    """One file to judge by checks 2-4: the arrival's `data`, or one file of a tree. `name` is how sentences call it
+    ("photo.png", or "setup.exe inside photos/"); `sha256` and `bytes` are what the sender declared for it."""
+    def __init__(self, name, path, sha256, bytes, base=None):
+        self.name, self.path, self.sha256, self.bytes = name, path, sha256, bytes
+        self.base = base or name          # the bare file name, for the ending and the executable rules
+
+
 class Context:
-    """What the checks share: the arrival, the config, who looked up whois, and what check 1 found."""
+    """What the checks share: the arrival, the config, who looked up whois, what check 1 found, and the file under
+    judgement (`file`: the arrival's data, or each file of a tree in turn)."""
     def __init__(self, arrival, cfg, env=None):
         self.arrival, self.cfg = arrival, cfg
+        self.file = Item(arrival.name, arrival.data, arrival.meta.get("sha256"), arrival.meta.get("bytes"))
         self.env = dict(env if env is not None else os.environ)
         self.whois = identity.Whois(self.env)
         self.route = self.sender = None        # set by check_route when the route and the sender resolve
@@ -175,22 +191,24 @@ def check_route(ctx, v):
 def check_kind(ctx, v):
     """Check 2: executables refused first (in code), then the ending must be an allowed kind for the route (the Taildrop
     list for Taildrop) and the content must pass that kind's sniff. Sets v.kind and ctx.kind when a kind matches."""
-    a, cfg = ctx.arrival, ctx.cfg
-    name = a.name
-    ctx.kind = None
+    f, cfg = ctx.file, ctx.cfg
+    name = f.name
+    ctx.kind = ctx.ext = None
     try:
-        size = a.data.stat().st_size
-        head = kinds.read_head(a.data)
+        size = f.path.stat().st_size
+        head = kinds.read_head(f.path)
     except OSError as e:
-        raise Failed("cannot read %s (%s)" % (a.data, e.strerror or e))
-    reason = kinds.refused_name(name) or kinds.refused_content(name, head)
+        raise Failed("cannot read %s (%s)" % (f.path, e.strerror or e))
+    reason = kinds.refused_name(f.base) or kinds.refused_content(name, head)
+    if reason and f.base != name:
+        reason = reason.replace("(%s)" % f.base, "(%s)" % name).replace("%s is a hidden" % f.base, "%s is a hidden" % name)
     if reason:
         v.fail("kind", reason)
     route = ctx.route
     allowed = route.kinds_for(ctx.via) if route is not None else list(cfg.kinds)
     # the ending, judged against every kind the config knows, so the sentence can say what the route lacks
     all_exts = {e for k in cfg.kinds.values() for e in k.ext}
-    ext = ctx.ext = kinds.ext_of(name, all_exts)
+    ext = ctx.ext = kinds.ext_of(f.base, all_exts)
     if ext is None:
         if not reason:
             v.fail("kind", "No kind in %s has files ending like %s, so it can't arrive on any route." % (cfg.what, name))
@@ -206,7 +224,7 @@ def check_kind(ctx, v):
                    % (name, an(with_ext[0].name), route.id, config.join(allowed)))
         return
     for k in candidates:
-        if k.sniff is None or kinds.sniff(k.sniff, a.data, name, ext, head, size):
+        if k.sniff is None or kinds.sniff(k.sniff, f.path, name, ext, head, size):
             ctx.kind = k
             v.kind = k.name
             if k.note:
@@ -226,31 +244,31 @@ def an(word):
 
 def check_size(ctx, v):
     """The size cap of the kind and of the route (design §3 check 3, first line)."""
-    a = ctx.arrival
-    size = a.data.stat().st_size
+    f = ctx.file
+    size = f.path.stat().st_size
     if ctx.kind is not None and ctx.kind.max_bytes is not None and size > ctx.kind.max_bytes:
         v.fail("shape", "%s is %s, over the %s cap for %s files."
-               % (a.name, config.size(size), config.size(ctx.kind.max_bytes), ctx.kind.name))
+               % (f.name, config.size(size), config.size(ctx.kind.max_bytes), ctx.kind.name))
     if ctx.route is not None and ctx.route.max_bytes is not None and size > ctx.route.max_bytes:
         v.fail("shape", "%s is %s, over the %s cap of the %s route."
-               % (a.name, config.size(size), config.size(ctx.route.max_bytes), ctx.route.id))
+               % (f.name, config.size(size), config.size(ctx.route.max_bytes), ctx.route.id))
 
 
 def check_shape(ctx, v):
     """Check 3, the rules: the kind's `shape` list, every rule in order (shapes.py; archive-listing comes with #7)."""
     if ctx.kind is None:
         return
-    a = ctx.arrival
+    f = ctx.file
     for rule in ctx.kind.shape:
         try:
             if rule == "archive-listing":
                 cap = ctx.route.max_bytes if ctx.route is not None and ctx.route.max_bytes else ctx.kind.max_bytes
-                reasons, notes = archives.listing(a.name, a.data, cap, ctx.ext)
+                reasons, notes = archives.listing(f.name, f.path, cap, ctx.ext)
                 v.notes.extend(notes)
             else:
-                reasons = shapes.RULES[rule](a.name, a.data, ctx.route, ctx.env)
+                reasons = shapes.RULES[rule](f.name, f.path, ctx.route, ctx.env)
         except OSError as e:
-            raise Failed("cannot read %s (%s)" % (a.data, e.strerror or e))
+            raise Failed("cannot read %s (%s)" % (f.path, e.strerror or e))
         for r in reasons:
             v.fail("shape", r)
 
@@ -270,35 +288,51 @@ def sha256_file(path):
 
 
 def check_integrity(ctx, v):
-    """Check 4: the hash recomputed (never Hermes's), the size on disk against meta.bytes, then seen.db: the same hash
-    on the same route is a duplicate. A pass records the hash (run() does, once the verdict is known)."""
-    a = ctx.arrival
+    """Check 4 for one file: the hash recomputed (never Hermes's) against what was declared, the size on disk against
+    the declared bytes. Returns the hash. The duplicate rule is check_duplicate, once per arrival."""
+    f = ctx.file
     sender = who(ctx)
     try:
-        size = a.data.stat().st_size
-        v.sha256 = sha256_file(a.data)
+        size = f.path.stat().st_size
+        digest = sha256_file(f.path)
     except OSError as e:
-        raise Failed("cannot read %s (%s)" % (a.data, e.strerror or e))
-    declared = a.meta.get("sha256")
-    if not isinstance(declared, str) or declared.lower() != v.sha256:
+        raise Failed("cannot read %s (%s)" % (f.path, e.strerror or e))
+    if not isinstance(f.sha256, str) or f.sha256.lower() != digest:
         v.fail("integrity", "%s's checksum doesn't match what %s declared (the transfer may have been cut short or "
-                            "changed on the way)." % (a.name, sender))
-    if a.meta.get("bytes") != size:
-        v.fail("integrity", "%s is %s on disk but %s declared %s." % (a.name, config.size(size), sender,
-               config.size(a.meta["bytes"]) if isinstance(a.meta.get("bytes"), int) else repr(a.meta.get("bytes"))))
-    if ctx.store is not None and a.route_id:
-        try:
-            earlier = ctx.store.lookup(v.sha256, a.route_id)
-        except seen.Broken as e:
-            raise Failed(str(e))
-        if earlier:
-            sentence = "%s already arrived on the %s route as %s (first seen %s)." % (a.name, a.route_id, earlier["id"],
-                                                                                      earlier["first_seen"])
-            if v.verdict == "quarantine":
-                v.notes.append(sentence)
-            else:
-                v.duplicate = True
-                v.reasons.append(sentence)
+                            "changed on the way)." % (f.name, sender))
+    if f.bytes != size:
+        v.fail("integrity", "%s is %s on disk but %s declared %s." % (f.name, config.size(size), sender,
+               config.size(f.bytes) if isinstance(f.bytes, int) and not isinstance(f.bytes, bool) else repr(f.bytes)))
+    return digest
+
+
+def check_duplicate(ctx, v):
+    """seen.db: the same hash (v.sha256) on the same route is a duplicate, unless the arrival is already a quarantine
+    (then it is only a note). A pass records the hash (run() does, once the verdict is known)."""
+    a = ctx.arrival
+    if ctx.store is None or not a.route_id or not v.sha256:
+        return
+    try:
+        earlier = ctx.store.lookup(v.sha256, a.route_id)
+    except seen.Broken as e:
+        raise Failed(str(e))
+    if earlier:
+        sentence = "%s already arrived on the %s route as %s (first seen %s)." % (a.name, a.route_id, earlier["id"],
+                                                                                  earlier["first_seen"])
+        if v.verdict == "quarantine":
+            v.notes.append(sentence)
+        else:
+            v.duplicate = True
+            v.reasons.append(sentence)
+
+
+def check_file(ctx, v, item):
+    """Checks 2-4 on one file: the kind, the caps, the shape rules, the hash and size. Returns the file's hash."""
+    ctx.file = item
+    check_kind(ctx, v)
+    check_size(ctx, v)
+    check_shape(ctx, v)
+    return check_integrity(ctx, v)
 
 
 # ---------- the run ----------
@@ -312,7 +346,7 @@ def run(folder, cfg=None, env=None):
         except config.ConfigError as e:
             raise Failed(str(e))
     arrival = Arrival(folder)
-    if not arrival.data.exists():
+    if not arrival.data.exists() and not arrival.is_tree:
         raise Failed("%s has no data" % arrival.folder)
     ctx = Context(arrival, cfg, env)
     try:
@@ -321,10 +355,12 @@ def run(folder, cfg=None, env=None):
         raise Failed(str(e))
     try:
         check_route(ctx, v)
-        check_kind(ctx, v)
-        check_size(ctx, v)
-        check_shape(ctx, v)
-        check_integrity(ctx, v)
+        if arrival.is_tree:
+            from janus import tree       # tree.py uses the checks above; imported here, not at the top, for that reason
+            tree.check_tree(ctx, v)
+        else:
+            v.sha256 = check_file(ctx, v, ctx.file)
+        check_duplicate(ctx, v)
         if v.verdict == "pass":
             try:
                 ctx.store.record(v.sha256, arrival.route_id, str(arrival.meta.get("id") or arrival.folder.name))

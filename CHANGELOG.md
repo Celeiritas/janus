@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.1.6 – 2026-10-21
+- Tree arrivals (#8): `tree.py` checks a folder sent parted out (`data/<tree>` plus `manifest.json`, the format in `docs/contract.md`): check 1 once, checks 2–4 on every listed file with the failing file named ("setup.exe inside photos/"), climbing or hidden paths, backslashes and drive letters refused, symlinks anywhere under `data/` refused, holes (listed but missing) and strays (present but unlisted) refused, the manifest's hash against `meta.sha256` and the sizes' sum against `meta.bytes`; one verdict with `kind: "tree"` and a note counting the files; the duplicate rule uses the manifest's hash. `check.py` now judges files through one `Item`, so a single file and each file of a tree go through the same code. `docs/contract.md` written (Hermes ↔ Janus, both arrival shapes)
+
 ## 0.1.5 – 2026-10-21
 - Archives by listing (#7): `archives.py` is the `archive-listing` shape rule. A zip is read by its central directory plus the first four bytes of each member; a tar or tar.gz by streaming its headers; nothing is extracted. Refused: a member that hits the executable rules (name or PE/ELF/Mach-O/`#!` content), a path that climbs or is absolute or has a drive letter, symbolic and hard links, an encrypted member, more than 50 000 members, a declared size over the route's (else the kind's) cap, or a declared size 100× the packed size from 1 MB up (the zip-bomb rule). Nested archives are counted into `notes` ("nested archives: 3 (not opened)") and never opened. `.7z`/`.rar` pass with the note "archive contents unchecked (.7z)" wherever the route lists `archive-opaque`
 
