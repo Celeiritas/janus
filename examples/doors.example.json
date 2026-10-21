@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "devices": {
+    "{{SERVER}}": { "expect": "always", "doors": {
+      "ssh":            { "port": 2200, "agents": ["hermes"], "note": "Hermes door key" },
+      "jellyfin":       { "port": 8096, "agents": ["hermes-jellyfin"], "clients": ["{{PHONE}}", "tv"] },
+      "audiobookshelf": { "port": 13378 },
+      "qbittorrent":    { "port": 8080, "agents": ["hermes", "hermes-sort"], "note": "inside the VPN container; VPN-only to the internet" },
+      "elaia":          { "serve": true, "health": "/argus/api/health", "agents": ["argus", "mentor", "janus", "hermes"] },
+      "sunshine":       { "port": 47990, "expect": "sometimes", "clients": ["{{PHONE}}", "{{PC}}"] },
+      "steam-link":     { "port": 27036, "expect": "sometimes" },
+      "syncthing":      { "port": 22000, "expect": "sometimes", "note": "planned everywhere" }
+    } },
+    "{{PC}}": { "expect": "when-online", "note": "a VPN takes it off the tailnet: drawn asleep, never an alarm", "doors": {
+      "taildrop":  { "taildrop": true, "agents": ["hermes"] },
+      "apollo":    { "port": 47990, "clients": ["{{SERVER}}"] },
+      "syncthing": { "port": 22000, "expect": "sometimes" }
+    } },
+    "laptop":    { "expect": "sometimes", "doors": { "taildrop": { "taildrop": true, "agents": ["hermes"] } } },
+    "{{PHONE}}": { "expect": "sometimes", "doors": { "taildrop": { "taildrop": true, "agents": ["hermes"] } },
+                   "uses": ["jellyfin", "sunshine", "elaia"] },
+    "tablet":    { "expect": "sometimes", "doors": {}, "note": "not on the tailnet yet" }
+  }
+}
