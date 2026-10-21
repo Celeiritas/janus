@@ -2,7 +2,7 @@
 import argparse
 import sys
 
-from janus import config, version
+from janus import check, config, version
 
 DESCRIPTION = ("Janus is the door: he checks every Hermes delivery before it lands and draws which doors of the "
                "tailnet are open. He never carries, moves, unpacks or runs anything.")
@@ -48,7 +48,7 @@ def build_parser():
     p = sub.add_parser("check", help="check one arrival from Hermes: exit 0 pass, 10 quarantine, 11 duplicate, 2 failed")
     p.add_argument("--json", action="store_true", help="the verdict as one JSON object on stdout (what Hermes reads)")
     p.add_argument("arrival", help="the arrival folder: meta.json and data")
-    p.set_defaults(func=not_built("check", 3))
+    p.set_defaults(func=check.main)
     p = sub.add_parser("verify-approval", help="answer Zeus: is this approval from an allowed person on an allowed device?")
     p.set_defaults(func=not_built("verify-approval", 10))
     p = sub.add_parser("map", help="probe the doors of the tailnet and write map.json (janus-map.timer)")
