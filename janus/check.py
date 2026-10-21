@@ -7,7 +7,7 @@ import os
 import time
 from pathlib import Path
 
-from janus import config, identity, kinds, log, seen, shapes, version
+from janus import archives, config, identity, kinds, log, seen, shapes, version
 
 EXIT = {"pass": 0, "quarantine": 10, "duplicate": 11, "fail": 2}
 CHECKS = ("route", "kind", "shape", "integrity")
@@ -76,6 +76,7 @@ class Context:
         self.whois = identity.Whois(self.env)
         self.route = self.sender = None        # set by check_route when the route and the sender resolve
         self.kind = None                       # set by check_kind when a kind matches
+        self.ext = None                        # the ending the kind was matched on (.tar.gz, not .gz)
         self.identity = None                   # what whois said about the sender's address, for the log
         self.store = None                      # seen.db, opened by run()
         self.via = arrival.sender.get("via")
@@ -189,7 +190,7 @@ def check_kind(ctx, v):
     allowed = route.kinds_for(ctx.via) if route is not None else list(cfg.kinds)
     # the ending, judged against every kind the config knows, so the sentence can say what the route lacks
     all_exts = {e for k in cfg.kinds.values() for e in k.ext}
-    ext = kinds.ext_of(name, all_exts)
+    ext = ctx.ext = kinds.ext_of(name, all_exts)
     if ext is None:
         if not reason:
             v.fail("kind", "No kind in %s has files ending like %s, so it can't arrive on any route." % (cfg.what, name))
@@ -209,7 +210,7 @@ def check_kind(ctx, v):
             ctx.kind = k
             v.kind = k.name
             if k.note:
-                v.notes.append("%s %s (%s)." % (k.name.replace("-", " "), k.note, ext))
+                v.notes.append("%s %s (%s)" % ("archive" if k.sniff == "archive" else k.name, k.note, ext))
             return
     k = candidates[0]
     ctx.kind = k
@@ -241,11 +242,13 @@ def check_shape(ctx, v):
         return
     a = ctx.arrival
     for rule in ctx.kind.shape:
-        fn = shapes.RULES.get(rule)
-        if fn is None:
-            raise Failed("the %s shape rule is not built yet (issue #7); the arrival waits" % rule)
         try:
-            reasons = fn(a.name, a.data, ctx.route, ctx.env)
+            if rule == "archive-listing":
+                cap = ctx.route.max_bytes if ctx.route is not None and ctx.route.max_bytes else ctx.kind.max_bytes
+                reasons, notes = archives.listing(a.name, a.data, cap, ctx.ext)
+                v.notes.extend(notes)
+            else:
+                reasons = shapes.RULES[rule](a.name, a.data, ctx.route, ctx.env)
         except OSError as e:
             raise Failed("cannot read %s (%s)" % (a.data, e.strerror or e))
         for r in reasons:

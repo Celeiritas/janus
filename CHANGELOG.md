@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.1.5 – 2026-10-21
+- Archives by listing (#7): `archives.py` is the `archive-listing` shape rule. A zip is read by its central directory plus the first four bytes of each member; a tar or tar.gz by streaming its headers; nothing is extracted. Refused: a member that hits the executable rules (name or PE/ELF/Mach-O/`#!` content), a path that climbs or is absolute or has a drive letter, symbolic and hard links, an encrypted member, more than 50 000 members, a declared size over the route's (else the kind's) cap, or a declared size 100× the packed size from 1 MB up (the zip-bomb rule). Nested archives are counted into `notes` ("nested archives: 3 (not opened)") and never opened. `.7z`/`.rar` pass with the note "archive contents unchecked (.7z)" wherever the route lists `archive-opaque`
+
 ## 0.1.4 – 2026-10-21
 - Integrity check (#6): the SHA-256 of `data` is recomputed in 1 MB chunks (never Hermes's hash) and compared with `meta.sha256`; the size on disk must equal `meta.bytes`. `seen.py`: SQLite `~/.local/share/janus/seen.db` (`$JANUS_STATE` names the folder) of hash → route, id, first seen; the same hash on the same route is a duplicate (exit 11); a pass records the hash; a corrupt store is exit 2, never a pass; `janus seen list` and `janus seen forget <hash>`. `log.py`: one line per check in `log/verdicts-YYYY-MM.jsonl` (design §5). With all four checks built, `janus check` now passes clean arrivals (exit 0)
 

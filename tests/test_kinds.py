@@ -68,7 +68,7 @@ class KindCheckTest(unittest.TestCase):
     def test_opaque_archives_pass_with_a_note(self):
         v, _ = self.verdict(self.r.arrival("disc.7z", samples.sample(".7z"), route="roms"))
         self.assertEqual(v.reasons, [])
-        self.assertEqual(v.notes, ["archive opaque contents unchecked (.7z)."])
+        self.assertEqual(v.notes, ["archive contents unchecked (.7z)"])
 
     # --- executables: refused in code, whatever the route or the config says ---
     def test_an_exe_renamed_png_quarantines(self):
