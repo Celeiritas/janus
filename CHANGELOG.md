@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.2.1 – 2026-10-21
+- `CLAUDE.md`: pull requests merge themselves when CI is green (`main` requires `tests` and `check-private`; `gh pr merge <n> --auto --merge` right after `gh pr create`); branches always off `main`, never stacked. The same rule as Zeus
+
 ## 0.2.0 – 2026-10-21
 - **`janus verify-approval`** (#10): Zeus's question "is this person on this device allowed to approve, now?" answered from `tailscale whois` on the client address and `approvers.zeus` in `routes.json`. Actions `deploy`, `rollback` (repo + sha) and `release` (a Hermes arrival id). From the page the named user must equal the tailnet's login; over ssh `user` is `null` and Janus answers with the tailnet's login. Freshness (`max_age_s`), future-dated and malformed requests refused; tagged devices refused. Exit 0 allowed · 10 refused (every reason in one answer) · 2 failed (tailscale down, no such peer, broken config). One line per call in `log/approvals-YYYY-MM.jsonl`. `--routes <file>` judges by another file. The contract: `docs/contract.md`, last section
 - Tests: allowed from the page and over ssh, wrong user on both paths, right user on a wrong device, page user ≠ tailnet user, tagged device, stale and future requests (and a `Z` suffix), every malformed field and an oversized body, unknown peer and tailscale down, broken routes file, no approvers entry, `--routes`
