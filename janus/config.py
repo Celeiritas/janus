@@ -296,6 +296,18 @@ def load(path=None, doors=False, hermes=False):
     return cfg
 
 
+def load_doors(path=None):
+    """Read and validate doors.json alone, for `janus map`: the map doesn't need routes.json, and a mistake there must
+    not stop it. Raises ConfigError when doors.json has errors."""
+    cfg = Config(Path(path or doors_path()))
+    doc = _read(cfg.path, cfg, realm(), "doors.example.json")
+    if doc is not None:
+        _check_doors(cfg, doc)
+    if cfg.errors:
+        raise ConfigError(cfg)
+    return cfg
+
+
 def _unknown(cfg, where, raw, allowed):
     for k in sorted(set(raw) - set(allowed)):
         cfg.warnings.append("%s: unknown setting %r is ignored (the settings are %s)." % (where, k, ", ".join(allowed)))
