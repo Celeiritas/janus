@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.2.2 – 2026-11-09
+- `docs/plans/2026-11-09-map-page.md`: the plan for #11, #13 and #12 (order and versions), the shared `map.json` / doors log / alert file / plugin contract, the two-probe rule and its exceptions, the blockers and the owner's open questions (Q1–Q5). Nothing in `janus/` changes
+
 ## 0.2.1 – 2026-10-21
 - `CLAUDE.md`: pull requests merge themselves when CI is green (`main` requires `tests` and `check-private`; `gh pr merge <n> --auto --merge` right after `gh pr create`); branches always off `main`, never stacked. The same rule as Zeus
 
