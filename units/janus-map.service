@@ -1,0 +1,11 @@
+# janus-map.service: one run of janus map (ask Tailscale which devices are online, probe every door doors.json lists on
+# those, write what changed), started by janus-map.timer every 5 minutes and by "Probe now" on the Map page. Under 1 s
+# when every door answers, under 3 s when every door times out. argus-limits.conf (a drop-in next to it) adds the CPU,
+# memory and I/O limits every agent task gets.
+[Unit]
+Description=Janus: draw the map (which doors of the tailnet are open)
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/janus map
+Nice=10

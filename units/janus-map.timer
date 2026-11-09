@@ -1,0 +1,18 @@
+# janus-map.timer: every 5 minutes (docs/design.md §6a). Not persistent: a run missed while the server was off is not
+# made up afterwards, the next one draws the map as it is then. Nothing installs these for you:
+#   mkdir -p ~/.config/systemd/user/janus-map.service.d
+#   cp units/janus-map.service units/janus-map.timer ~/.config/systemd/user/
+#   cp units/argus-limits.conf ~/.config/systemd/user/janus-map.service.d/
+#   systemctl --user daemon-reload && systemctl --user enable --now janus-map.timer
+[Unit]
+Description=Janus: draw the map every 5 minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=5min
+AccuracySec=20s
+Persistent=false
+Unit=janus-map.service
+
+[Install]
+WantedBy=timers.target
