@@ -1,11 +1,14 @@
 # janus-map.service: one run of janus map (ask Tailscale which devices are online, probe every door doors.json lists on
 # those, write what changed), started by janus-map.timer every 5 minutes and by "Probe now" on the Map page. Under 1 s
 # when every door answers, under 3 s when every door times out. argus-limits.conf (a drop-in next to it) adds the CPU,
-# memory and I/O limits every agent task gets.
+# memory and I/O limits every agent task gets. TimeoutStartSec=60: a one-shot unit has no start timeout of its own, so a
+# run that hangs (a tailscale that never answers, a lock that never frees) would keep every later run from starting.
+# After 60 s systemd stops it and the timer's next run starts as usual.
 [Unit]
 Description=Janus: draw the map (which doors of the tailnet are open)
 
 [Service]
 Type=oneshot
 ExecStart=%h/.local/bin/janus map
+TimeoutStartSec=60
 Nice=10

@@ -1120,6 +1120,7 @@ class UnitsTest(unittest.TestCase):
         self.assertEqual(len([line for line in lines if line.startswith("Description=") and len(line) > 20]), 1)
         self.assertIn("Type=oneshot", lines)
         self.assertIn("ExecStart=%h/.local/bin/janus map", lines)
+        self.assertIn("TimeoutStartSec=60", lines)      # a one-shot has no start timeout of its own: a hung run must not block the timer
         self.assertNotIn("[Install]", lines)            # the timer starts it; it is never enabled by itself
 
     def test_the_timer_runs_it_every_five_minutes(self):

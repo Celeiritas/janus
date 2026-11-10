@@ -5,6 +5,7 @@
 - `map.json`, the doors log and the alert file hold **no tailnet addresses**: they are read from Tailscale on every run and never written (plan Q4). `docs/design.md` §6a and §8 say so now
 - `config.load_doors()` reads `doors.json` alone, so a mistake in `routes.json` cannot stop the map
 - `units/`: `janus-map.service` (one-shot), `janus-map.timer` (every 5 minutes) and the `argus-limits.conf` drop-in (CPU 25 %, 512 MB, nice 10). Nothing installs or enables them yet (#14)
+- `janus-map.service` sets `TimeoutStartSec=60`. A one-shot unit has no start timeout of its own, so a run that hangs (a `tailscale` that never answers, a lock that never frees) would have kept every later timer run from starting. A run takes under 3 s; after 60 s systemd stops it and the next run starts as usual. Found in the review of the pull request
 - Tests: `tests/test_mapper.py` (66 tests with the fake tailscale and local listeners: every state and probe text, the two-probe rule and its three exceptions, the alert file, a run with no change writing nothing, a failed run writing nothing, the status line, under 1 s with every door answering and under 3 s with every door silent, the unit files); the fake tailscale learns `JANUS_FAKE_STATUS=fail|garbage`; `load_doors` in `tests/test_config.py`
 - CI runs on `ubuntu-24.04` (was `ubuntu-latest`), so a new runner image can't change a result unasked
 - `docs/plans/2026-11-09-map-page.md` §7 "As built": what the build added to the plan, and blockers B3 and B4 answered
