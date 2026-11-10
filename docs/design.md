@@ -141,10 +141,10 @@ Hermes writes Janus's stdout into quarantine as `verdict.json` and raises its ow
 
 ## 6. The map
 ### 6a. Data: `janus map` (timer `janus-map.timer`, every 5 min, plus Probe now)
-1. `tailscale status --json`: which devices exist, online or not, OS, last seen, tailnet IPs. Devices not in `doors.json` are drawn as rooms with no doors.
+1. `tailscale status --json`: which devices exist, online or not, OS, last seen. The tailnet addresses are read from it for that run's probes and are never written: `map.json`, the log and the alert file hold none (0.3.0). Devices not in `doors.json` are drawn as rooms with no doors.
 2. For each device Tailscale reports **online**, one TCP connect (2 s timeout) per expected door in `doors.json`; `serve` doors are probed with a GET of the health path; `taildrop` doors count as open when the device is online (a Taildrop can't be test-sent). Offline devices are skipped entirely, so nothing retries against a sleeping machine.
-3. A door changes state only after **two consecutive** probes agree (one dropped packet never makes Argus glare).
-4. Write `map.json` and a `doors-*.jsonl` line only when a state changed; write or clear the alert file.
+3. A door changes state only after **two consecutive** probes agree (one dropped packet never makes Argus glare). As built in 0.3.0 this holds for a change to *closed*; a door that answers is open at once, and what Tailscale says about a room (asleep, back online) counts at once. The exact rule and its three exceptions: `docs/plans/2026-11-09-map-page.md` §3.3.
+4. Write `map.json` and a `doors-*.jsonl` line only when a state changed; write or clear the alert file. What changes on every run (when it ran, the doors waiting for their second probe) goes to `run.json` in the runtime directory, which is memory.
 
 Per run: one local socket read, about ten TCP connects, under a second of CPU, no disk writes when nothing changed. Limits drop-in like every job Argus watches (argus-ui's `argus-limits.conf`: CPU 25 %, 512 MB, nice 10).
 
@@ -227,7 +227,7 @@ tests/        run.sh (unittest): fixtures for every kind, a fake tailscale, arch
 CLAUDE.md, README.md, VERSION, CHANGELOG.md, LICENSE
 ```
 **Private config repo:** `janus/routes.json`, `janus/doors.json`. Copied into `~/.config/janus/` on deploy, never symlinked.
-**Never in any repo:** `seen.db`, logs, `map.json` (it holds tailnet addresses), quarantine contents.
+**Never in any repo:** `seen.db`, logs, `map.json` (it holds the owner's device names; since 0.3.0 no tailnet addresses), quarantine contents.
 
 ## 9. Build order
 | Version | Issues (one branch, one PR each; "done means" in each) | Needs |

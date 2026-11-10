@@ -23,6 +23,15 @@ class FakeTailscaleTest(unittest.TestCase):
         self.assertEqual(doc["Self"]["HostName"], "homeserver")
         self.assertEqual(sorted(p["HostName"] for p in doc["Peer"].values()), ["desktop", "laptop", "phone"])
 
+    def test_status_failure_modes(self):
+        r = run("status", "--json", JANUS_FAKE_STATUS="fail")
+        self.assertEqual((r.returncode, r.stdout), (1, ""))
+        self.assertIn("failed to connect to local tailscaled", r.stderr)
+        r = run("status", "--json", JANUS_FAKE_STATUS="garbage")
+        self.assertEqual(r.returncode, 0)
+        with self.assertRaises(ValueError):
+            json.loads(r.stdout)
+
     def test_whois_names_the_node_and_the_login(self):
         r = run("whois", "--json", "192.0.2.10")
         self.assertEqual(r.returncode, 0, r.stderr)

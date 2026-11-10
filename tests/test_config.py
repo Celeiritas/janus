@@ -261,6 +261,31 @@ class ConfigTest(unittest.TestCase):
         self.assertIn("doors.json: cannot read it", cfg.errors[0])
         self.assertEqual(config.check(doors=False).errors, [])
 
+    def test_load_doors_reads_doors_json_alone(self):
+        self.h.write(text="{ not json")                     # the map doesn't need routes.json: a mistake there can't stop it
+        cfg = config.load_doors()
+        self.assertEqual(list(cfg.devices), ["homeserver", "desktop", "laptop", "phone", "tablet"])
+        self.assertEqual((cfg.errors, cfg.what), ([], config.short(self.h.doors)))
+        self.assertEqual(list(cfg.devices["desktop"].doors), ["taildrop", "apollo", "syncthing"])
+        self.h.routes.unlink()
+        self.assertEqual(len(config.load_doors().devices), 5)
+        self.assertEqual(len(config.load_doors(DOORS_EXAMPLE).devices), 5)
+
+    def test_load_doors_refuses_a_doors_json_with_errors(self):
+        self.h.write(doors=self.doors("laptop", expect="maybe"))
+        with self.assertRaises(config.ConfigError) as e:
+            config.load_doors()
+        self.assertEqual(str(e.exception), config.short(self.h.doors) + ": 1 error; run `janus check-config`")
+        self.assertIn('devices.laptop: "expect" must be one of always, when-online, sometimes', e.exception.config.errors[0])
+        self.h.doors.write_text("{ not json")
+        with self.assertRaises(config.ConfigError) as e:
+            config.load_doors()
+        self.assertIn("doors.json: not valid JSON", e.exception.config.errors[0])
+        self.h.doors.unlink()
+        with self.assertRaises(config.ConfigError) as e:
+            config.load_doors()
+        self.assertIn("doors.json: cannot read it", e.exception.config.errors[0])
+
     # --- Hermes's routes ---
     def test_a_route_hermes_defines_but_janus_does_not_is_a_warning(self):
         self.h.hermes.write_text(json.dumps(HERMES_EXAMPLE))

@@ -2,7 +2,7 @@
 import argparse
 import sys
 
-from janus import approvals, check, config, seen, version
+from janus import approvals, check, config, mapper, seen, version
 
 DESCRIPTION = ("Janus is the door: he checks every Hermes delivery before it lands and draws which doors of the "
                "tailnet are open. He never carries, moves, unpacks or runs anything.")
@@ -27,14 +27,6 @@ def check_config(args):
     return 0
 
 
-def not_built(what, issue):
-    """A command a later issue builds. Exit 2 means "Janus failed": Hermes holds the arrival, nothing passes unchecked."""
-    def run(args):
-        print("janus %s: not built yet (issue #%d); nothing was checked." % (what, issue), file=sys.stderr)
-        return 2
-    return run
-
-
 def build_parser():
     parser = argparse.ArgumentParser(prog="janus", description=DESCRIPTION)
     parser.add_argument("--version", action="version", version="janus " + version())
@@ -53,8 +45,11 @@ def build_parser():
                                                "(the request on stdin, the answer on stdout; exit 0 allowed, 10 refused, 2 failed)")
     p.add_argument("--routes", metavar="FILE", help="a routes file to judge by instead of the installed one")
     p.set_defaults(func=approvals.main)
-    p = sub.add_parser("map", help="probe the doors of the tailnet and write map.json (janus-map.timer)")
-    p.set_defaults(func=not_built("map", 11))
+    p = sub.add_parser("map", help="probe the doors of the tailnet and write map.json when something changed "
+                                   "(janus-map.timer runs it; exit 0 the run completed, 2 it could not be made)")
+    p.add_argument("--json", action="store_true", help="the map as one JSON object on stdout")
+    p.add_argument("--once", action="store_true", help="one run now: what a run always is (the Map page's Probe now says it)")
+    p.set_defaults(func=mapper.main)
     p = sub.add_parser("seen", help="the hashes Janus has passed: list them, or forget one")
     p.add_argument("action", choices=("list", "forget"))
     p.add_argument("hash", nargs="?")

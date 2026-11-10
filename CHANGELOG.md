@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0 – 2026-11-09
+- **`janus map`** (#11), the second face. One run asks `tailscale status --json` which devices exist and which are online, probes every door `doors.json` lists on the online ones (a TCP connect with a 2 s timeout; a GET of a `serve` door's health path; a Taildrop door is open while its device is online) and writes only what changed: `map.json` (version 1, the shape in `docs/plans/2026-11-09-map-page.md` §3.4), one `doors-YYYY-MM.jsonl` line per change, and argus-ui's alert file `alerts/janus.json` while a door that should be open is closed (removed in the run that finds it open again). A door is called closed only after two failed probes in a row; the first one waits in `run.json` in the runtime directory (memory), so a run that finds no change writes nothing to disk. A device Tailscale reports offline is never probed. `--json` prints the map, `--once` is the same run. Exit 0 when the run completed, 2 when Tailscale or `doors.json` could not be read (then nothing is written and the previous map stays)
+- `map.json`, the doors log and the alert file hold **no tailnet addresses**: they are read from Tailscale on every run and never written (plan Q4). `docs/design.md` §6a and §8 say so now
+- `config.load_doors()` reads `doors.json` alone, so a mistake in `routes.json` cannot stop the map
+- `units/`: `janus-map.service` (one-shot), `janus-map.timer` (every 5 minutes) and the `argus-limits.conf` drop-in (CPU 25 %, 512 MB, nice 10). Nothing installs or enables them yet (#14)
+- `janus-map.service` sets `TimeoutStartSec=60`. A one-shot unit has no start timeout of its own, so a run that hangs (a `tailscale` that never answers, a lock that never frees) would have kept every later timer run from starting. A run takes under 3 s; after 60 s systemd stops it and the next run starts as usual. Found in the review of the pull request
+- Tests: `tests/test_mapper.py` (66 tests with the fake tailscale and local listeners: every state and probe text, the two-probe rule and its three exceptions, the alert file, a run with no change writing nothing, a failed run writing nothing, the status line, under 1 s with every door answering and under 3 s with every door silent, the unit files); the fake tailscale learns `JANUS_FAKE_STATUS=fail|garbage`; `load_doors` in `tests/test_config.py`
+- CI runs on `ubuntu-24.04` (was `ubuntu-latest`), so a new runner image can't change a result unasked
+- `docs/plans/2026-11-09-map-page.md` §7 "As built": what the build added to the plan, and blockers B3 and B4 answered
+
 ## 0.2.2 – 2026-11-09
 - `docs/plans/2026-11-09-map-page.md`: the plan for #11, #13 and #12 (order and versions), the shared `map.json` / doors log / alert file / plugin contract, the two-probe rule and its exceptions, the blockers and the owner's open questions (Q1–Q5). Nothing in `janus/` changes
 
