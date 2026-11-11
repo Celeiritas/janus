@@ -106,6 +106,9 @@ def verify(req, cfg=None, now=None, whois=None):
         reasons.append("The page says %s but the tailnet says %s is using %s." % (claimed, login, node))
     elif claimed is None and login not in rule["users"]:
         reasons.append("%s may not approve for Zeus." % login)
+    if not reasons and not (node and login):
+        # The contract (docs/contract.md): exit 0 always carries user and node. Held here as the last gate, whatever the config says.
+        reasons.append("Janus could not name both the user and the device, so he does not pass this.")
     answer["reasons"] = reasons
     answer["verdict"] = "allowed" if not reasons else "refused"
     return (0 if not reasons else 10), answer

@@ -149,3 +149,44 @@ class VerifyApprovalTest(unittest.TestCase):
         code, a, _ = self.ask(req())
         self.assertEqual(code, 10)
         self.assertIn("nobody may approve", a["reasons"][0])
+
+
+class PassNamesUserAndNodeTest(unittest.TestCase):
+    """The contract rule (docs/contract.md): exit 0 always carries user and node."""
+
+    @staticmethod
+    def cfg(nodes, users=("you@example.com",)):
+        from types import SimpleNamespace
+        return SimpleNamespace(approvers={"zeus": {"users": list(users), "nodes": list(nodes), "max_age_s": 120}})
+
+    def decide(self, who, nodes=("phone",), request=None):
+        from janus import approvals
+        return approvals.verify(request or req(), self.cfg(nodes), whois=lambda ip: who)
+
+    def test_a_pass_names_both(self):
+        code, a = self.decide({"node": "phone", "login": "you@example.com"})
+        self.assertEqual((code, a["verdict"], a["user"], a["node"]), (0, "allowed", "you@example.com", "phone"))
+
+    def test_no_pass_without_a_user_or_a_node_even_when_the_config_would_allow_it(self):
+        # a config that lists a nameless device must not turn into a pass; each of these must be refused (10), never 0
+        for who, nodes in (({"node": "phone", "login": None}, ("phone",)),
+                           ({"node": "phone", "login": ""}, ("phone",)),
+                           ({"node": None, "login": "you@example.com"}, (None,)),
+                           ({"node": "", "login": "you@example.com"}, ("",)),
+                           ({}, (None,))):
+            with self.subTest(who=who):
+                code, a = self.decide(who, nodes, req(user=None, via="ssh"))
+                self.assertEqual(code, 10, a)
+                self.assertEqual(a["verdict"], "refused")
+                self.assertTrue(a["reasons"])
+
+    def test_every_exit_0_in_a_sweep_of_requests_has_user_and_node(self):
+        passes = 0
+        for over in ({}, {"user": None, "via": "ssh"}, {"action": "rollback"}, {"ip": GUEST_IP}, {"user": "someone@example.com"}):
+            for who in ({"node": "phone", "login": "you@example.com"}, {"node": "phone", "login": None},
+                        {"node": "other", "login": "you@example.com"}, {"node": None, "login": None}):
+                code, a = self.decide(who, ("phone",), req(**over))
+                if code == 0:
+                    passes += 1
+                    self.assertTrue(a["user"] and a["node"], (over, who, a))
+        self.assertGreater(passes, 0)
