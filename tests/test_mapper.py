@@ -619,7 +619,8 @@ class MapRunTest(MapCase):
         doc = self.run_map()
         self.assertEqual(doc["alert"], {"doors": ["homeserver/jellyfin", "desktop/apollo"], "since": stamp(2), "acked": []})
         self.assertEqual(self.alert(), {"job": "janus-map", "level": "alert", "since": stamp(2), "link": "map",
-                                        "message": "2 doors closed unexpectedly. Open the Map for their history."})
+                                        "message": "2 doors closed unexpectedly: homeserver's jellyfin, desktop's apollo. "
+                                                   "Open the Map for their history."})
         self.assertEqual([p.name for p in self.alerts.iterdir()], ["janus.json"])
         self.assertEqual(doc["line"], "2 doors open" + DOT + "2 closed unexpectedly" + DOT + "laptop asleep")
         self.jellyfin.open()

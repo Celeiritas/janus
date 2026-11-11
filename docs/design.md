@@ -135,7 +135,7 @@ All under `~/.local/share/janus/`; JSON lines, a new file each month, Poseidon t
 | `log/doors-YYYY-MM.jsonl` | **state change** of a door or room, not every poll | `t`, `device`, `door`, `from`, `to`, `expected` (bool), `probe` (e.g. "connect timeout 2 s") |
 | `map.json` | rewritten only when something changed | the current map (§6), read by the page |
 | `seen.db` | — | hash → route, id, first seen |
-| `~/.local/state/argus-ui/alerts/janus.json` | while an unexpectedly closed door exists | Hermes design §5's alert format: `{ "job": "janus-map", "level": "alert", "since": "…", "message": "{{SERVER}}'s Jellyfin door closed unexpectedly", "link": "map" }` |
+| `~/.local/state/argus-ui/alerts/janus.json` | while an unexpectedly closed door exists that `janus ack` has not marked as seen (a marked door stays quiet until it changes) | Hermes design §5's alert format: `{ "job": "janus-map", "level": "alert", "since": "…", "message": "{{SERVER}}'s Jellyfin door closed unexpectedly", "link": "map" }` |
 
 Hermes writes Janus's stdout into quarantine as `verdict.json` and raises its own alert for quarantines; Janus doesn't alert on verdicts, only on doors (one alert per cause, one owner).
 
