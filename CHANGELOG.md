@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1 – 2026-11-10
+- **Contract rule: exit 0 always carries `user` and `node`.** Stated in `docs/contract.md` (the Zeus section). Today's checks already guaranteed it (a pass needs a device on the approvers' list and a login); `verify-approval` now also holds it as a last gate, so a config that lists a nameless device, or a future change, can never produce an `allowed` answer without both. Zeus 0.6.1 prints "Janus named no login" in that case; Janus never does that
+- Tests: `PassNamesUserAndNodeTest` in `tests/test_approvals.py` (a pass names both; five nameless-device cases are refused with exit 10; a sweep of requests asserts every exit 0 has a user and a node). The guard test fails when the gate is removed
+
 ## 0.3.0 – 2026-11-09
 - **`janus map`** (#11), the second face. One run asks `tailscale status --json` which devices exist and which are online, probes every door `doors.json` lists on the online ones (a TCP connect with a 2 s timeout; a GET of a `serve` door's health path; a Taildrop door is open while its device is online) and writes only what changed: `map.json` (version 1, the shape in `docs/plans/2026-11-09-map-page.md` §3.4), one `doors-YYYY-MM.jsonl` line per change, and argus-ui's alert file `alerts/janus.json` while a door that should be open is closed (removed in the run that finds it open again). A door is called closed only after two failed probes in a row; the first one waits in `run.json` in the runtime directory (memory), so a run that finds no change writes nothing to disk. A device Tailscale reports offline is never probed. `--json` prints the map, `--once` is the same run. Exit 0 when the run completed, 2 when Tailscale or `doors.json` could not be read (then nothing is written and the previous map stays)
 - `map.json`, the doors log and the alert file hold **no tailnet addresses**: they are read from Tailscale on every run and never written (plan Q4). `docs/design.md` §6a and §8 say so now

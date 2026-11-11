@@ -59,4 +59,6 @@ The answer, always one JSON object on stdout:
 | 10 | `refused` | `reasons` are plain sentences the Throne shows as-is; Zeus leaves the request pending |
 | 2 | `failed` | tailscale not answering, no such peer, routes.json unreadable or with errors; Zeus holds the request and Argus glares |
 
+**Rule: exit 0 always carries `user` and `node`.** An `allowed` answer has a non-empty `user` (the login the tailnet reported) and a non-empty `node` (the device). Zeus logs both, and a pass that names neither is a Janus fault: Janus checks this last, after every other check, and refuses with a reason instead of passing. `tests/test_approvals.py` (`PassNamesUserAndNodeTest`) fails if an exit 0 comes without either.
+
 Janus answers only "is this person on this device allowed, now". Whether the request is still pending, unexpired and for the right commit, the signature and the deploy are Zeus's (zeus `docs/contract.md` §5). One line goes to `~/.local/share/janus/log/approvals-YYYY-MM.jsonl` for every call: `t, action, verdict, reasons, user, node, claimed_user, repo | arrival, sha, ip, via, when, janus`. `--routes <file>` judges by another file (the config repo's deploy checks a new file before installing it).
