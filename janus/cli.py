@@ -1,4 +1,4 @@
-"""The janus command line: check, verify-approval, map, check-config, seen. Each issue adds its part."""
+"""The janus command line: check, verify-approval, map, ack, check-config, seen. Each issue adds its part."""
 import argparse
 import sys
 
@@ -50,6 +50,14 @@ def build_parser():
     p.add_argument("--json", action="store_true", help="the map as one JSON object on stdout")
     p.add_argument("--once", action="store_true", help="one run now: what a run always is (the Map page's Probe now says it)")
     p.set_defaults(func=mapper.main)
+    p = sub.add_parser("ack", help="mark the doors closed unexpectedly right now as seen: Argus stops glaring about them until "
+                                   "one of them changes (exit 0 done or nothing to mark, 2 map.json is broken)",
+                    description="Mark the doors closed unexpectedly right now as seen: they go into alert.acked of map.json "
+                                "and the alert file is removed, so Argus stops glaring about them. A door that changes "
+                                "(reopens, its room falls asleep, it leaves doors.json) is no longer marked, so a later "
+                                "close alerts again. Exit 0 when done or when there was nothing to mark, 2 when map.json "
+                                "is broken (nothing is written).")
+    p.set_defaults(func=mapper.ack_main)
     p = sub.add_parser("seen", help="the hashes Janus has passed: list them, or forget one")
     p.add_argument("action", choices=("list", "forget"))
     p.add_argument("hash", nargs="?")

@@ -28,6 +28,7 @@ GRACE = 0.5                  # a probe still running this long after TIMEOUT is 
 STATUS_TIMEOUT = 10          # seconds for `tailscale status --json`
 ALERTS = "~/.local/state/argus-ui/alerts"     # or $ARGUS_ALERTS (argus-ui docs/alerts.md)
 JOB = "janus-map"            # the task the alert belongs to: the unit's name without ".service"
+NOTHING = "Nothing to mark as seen."
 WAITING = "; waiting for a second probe"
 NOT_PROBED = {"asleep": "device asleep, not probed", "absent": "device not on the tailnet, not probed"}
 ROOM_SAYS = {"online": "Tailscale says online", "asleep": "Tailscale says offline", "absent": "not in tailscale status"}
@@ -302,9 +303,23 @@ def line(rooms, c):
     return " \u00b7 ".join(parts)
 
 
+def door_names(doc, ids):
+    """The doors with these ids as the owner reads them: "homeserver's jellyfin" (device and door as doors.json names
+    them after the realm fill, never an address or a host name), in the page's order."""
+    return ["%s's %s" % (r["device"], d["name"]) for r in doc["rooms"] for d in r["doors"] if d["id"] in ids]
+
+
+def listed(names):
+    """Up to three names, comma by comma; more than three: the first three, then "and N more"."""
+    if len(names) <= 3:
+        return ", ".join(names)
+    return "%s and %d more" % (", ".join(names[:3]), len(names) - 3)
+
+
 def alert_for(doc):
-    """What alerts/janus.json should hold for this map (argus-ui docs/alerts.md), or None when no door is closed
-    unexpectedly. The names are the owner's own, as the page shows them: the file never leaves the server."""
+    """What alerts/janus.json should hold for this map (argus-ui docs/alerts.md), or None when no door is in the alert
+    set (plan 3.6: closed unexpectedly and not acknowledged). The names are the owner's own, as the page shows them:
+    the file never leaves the server."""
     ids = doc["alert"]["doors"]
     if not ids:
         return None
@@ -313,7 +328,7 @@ def alert_for(doc):
         device, d = doors[0]
         message = "%s's %s door closed unexpectedly (%s). Open the Map for its history." % (device, d["name"], d["probe"])
     else:
-        message = "%d doors closed unexpectedly. Open the Map for their history." % len(doors)
+        message = "%d doors closed unexpectedly: %s. Open the Map for their history." % (len(doors), listed(door_names(doc, ids)))
     return {"job": JOB, "level": "alert", "since": doc["alert"]["since"], "link": "map", "message": message}
 
 
@@ -328,6 +343,12 @@ def sync_alert(doc, env=None):
     elif read_json(path) != want:
         write_json(path, want)
     return want
+
+
+def acked_of(doc):
+    """The door ids a map has acknowledged ([] for no map or a map that says nothing)."""
+    acked = ((doc or {}).get("alert") or {}).get("acked") if isinstance((doc or {}).get("alert"), dict) else None
+    return [i for i in acked if isinstance(i, str)] if isinstance(acked, list) else []
 
 
 def run(env=None):
@@ -355,6 +376,7 @@ def _run(cfg, me, peers, env, started):
         old = None
     was_rooms = {r.get("device"): r for r in old["rooms"]} if old else {}
     was_doors = {d.get("id"): d for r in old["rooms"] for d in r["doors"]} if old else {}
+    was_acked = acked_of(old)
     waited = (read_json(run_path(env)) or {}).get("pending")
     waited = waited if isinstance(waited, dict) else {}
     now = log.now().isoformat(timespec="seconds")
@@ -423,9 +445,13 @@ def _run(cfg, me, peers, env, started):
         out.append(room)
 
     c = counts(out)
-    alarm = [d for r in out for d in r["doors"] if d["unexpected"]]
+    # An acknowledgement lasts while the door stays closed unexpectedly without a break: a door that reopened, whose room
+    # slept, or that left doors.json is no longer unexpected (or no longer closed) in this run, and drops out.
+    acked = [d["id"] for r in out for d in r["doors"] if d["unexpected"] and d["id"] in was_acked
+             and (was_doors.get(d["id"]) or {}).get("unexpected") is True and (was_doors.get(d["id"]) or {}).get("state") == "closed"]
+    alarm = [d for r in out for d in r["doors"] if d["unexpected"] and d["id"] not in acked]
     doc = {"version": 1, "changed": now, "line": line(out, c), "counts": c, "rooms": out,
-           "alert": {"doors": [d["id"] for d in alarm], "since": min((d["since"] for d in alarm), key=_time, default=None), "acked": []}}
+           "alert": {"doors": [d["id"] for d in alarm], "since": min((d["since"] for d in alarm), key=_time, default=None), "acked": acked}}
     if old is not None and {**old, "changed": None} == {**doc, "changed": None}:
         doc["changed"] = old.get("changed")         # nothing changed: nothing is written
     else:
@@ -461,4 +487,41 @@ def main(args):
         print(doc["line"].encode(sys.stdout.encoding or "utf-8", "replace").decode(sys.stdout.encoding or "utf-8"))
         for change in changes:
             print("  " + sentence(change))
+    return 0
+
+
+def ack(env=None):
+    """janus ack: mark the doors of the current alert set as seen -> the sentence to print. They go into alert.acked of
+    map.json and alerts/janus.json is removed. Holds the lock of a run, so the two never write over each other. Nothing to
+    mark (no map, or no door in the set) writes nothing. Raises Broken for a map.json that is not a map (nothing is
+    written) and Failed when the files cannot be written."""
+    env = dict(env if env is not None else os.environ)
+    try:
+        with locked(env):
+            doc = read_map(env)
+            ids = doc["alert"].get("doors") if doc and isinstance(doc.get("alert"), dict) else None
+            ids = [i for i in ids if isinstance(i, str)] if isinstance(ids, list) else []
+            if not ids:
+                sync_alert({"alert": {"doors": []}}, env)           # a file left with no door behind it goes too
+                return NOTHING
+            names = door_names(doc, ids)
+            doc["alert"] = {**doc["alert"], "doors": [], "since": None, "acked": acked_of(doc) + [i for i in ids if i not in acked_of(doc)]}
+            doc["changed"] = log.now().isoformat(timespec="seconds")
+            write_json(map_path(env), doc)
+            sync_alert(doc, env)
+    except OSError as e:
+        raise Failed("could not write what the acknowledgement changed (%s)" % e)
+    n = len(names)
+    return "Marked %s as seen: %s. Argus stays quiet about %s until %s." % (
+        config.plural(n, "closed door"), listed(names), "it" if n == 1 else "them", "it changes" if n == 1 else "one of them changes")
+
+
+def ack_main(args):
+    """janus ack: exit 0 when the doors are marked (or there was nothing to mark), 2 when it could not be done."""
+    try:
+        text = ack()
+    except Failed as e:
+        print("janus ack: %s" % e, file=sys.stderr)
+        return 2
+    print(text)
     return 0

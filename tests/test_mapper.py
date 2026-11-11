@@ -619,7 +619,8 @@ class MapRunTest(MapCase):
         doc = self.run_map()
         self.assertEqual(doc["alert"], {"doors": ["homeserver/jellyfin", "desktop/apollo"], "since": stamp(2), "acked": []})
         self.assertEqual(self.alert(), {"job": "janus-map", "level": "alert", "since": stamp(2), "link": "map",
-                                        "message": "2 doors closed unexpectedly. Open the Map for their history."})
+                                        "message": "2 doors closed unexpectedly: homeserver's jellyfin, desktop's apollo. "
+                                                   "Open the Map for their history."})
         self.assertEqual([p.name for p in self.alerts.iterdir()], ["janus.json"])
         self.assertEqual(doc["line"], "2 doors open" + DOT + "2 closed unexpectedly" + DOT + "laptop asleep")
         self.jellyfin.open()
@@ -1107,7 +1108,8 @@ class MapSpeedTest(MapCase):
             self.assertLess(took, 3.0)
             doc, _ = mapper.run()
         self.assertEqual(doc["line"], "3 doors open" + DOT + "6 closed unexpectedly" + DOT + "4 closed")
-        self.assertEqual(self.alert()["message"], "6 doors closed unexpectedly. Open the Map for their history.")
+        self.assertEqual(self.alert()["message"], "6 doors closed unexpectedly: homeserver's ssh, homeserver's jellyfin, "
+                                                   "homeserver's audiobookshelf and 3 more. Open the Map for their history.")
 
 
 class UnitsTest(unittest.TestCase):
